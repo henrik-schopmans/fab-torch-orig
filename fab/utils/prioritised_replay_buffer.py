@@ -64,8 +64,6 @@ class PrioritisedReplayBuffer:
                 # fill buffer up minimum length
                 x, log_w, log_q_old = initial_sampler()
                 self.add(x, log_w, log_q_old)
-        else:
-            print("Buffer not initialised, expected that checkpoint will be loaded.")
 
     @torch.no_grad()
     def add(self, x: torch.Tensor, log_w: torch.Tensor, log_q_old: torch.Tensor) -> None:
