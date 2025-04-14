@@ -1,7 +1,7 @@
 numpy
 torch
 normflows==1.7.3
-boltzgen @ git+https://github.com/VincentStimper/boltzmann-generators.git
+boltzgen @ git+https://github.com/VincentStimper/boltzmann-generators.git@2b177fc155f533933489b8fce8d6483ebad250d3
 larsflow @ git+https://github.com/VincentStimper/resampled-base-flows.git@18db5bf28ffa1d5ab9ef2b63856e186affee604b
 nflows @ git+https://github.com/bayesiains/nflows.git@3b122e5bbc14ed196301969c12d1c2d94fdfba47
 mdtraj
