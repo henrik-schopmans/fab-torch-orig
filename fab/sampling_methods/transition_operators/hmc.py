@@ -21,7 +21,8 @@ class HamiltonianMonteCarlo(TransitionOperator):
                  max_grad: float = 1e3,
                  tune_period: bool = False,
                  common_epsilon_init_weight: float = 0.1,
-                 eval_mode: bool = False
+                 eval_mode: bool = False,
+                 sampling_bounds: torch.Tensor | None = None,
                  ):
         """
         Step tuning with p_accept if used.
@@ -46,6 +47,8 @@ class HamiltonianMonteCarlo(TransitionOperator):
         self.average_distance_first_dist: torch.Tensor
         self.average_distance_last_dist: torch.Tensor
         self.eval_mode = eval_mode  # turn off step size tuning
+
+        self._sampling_bounds = sampling_bounds
 
 
     @property
@@ -134,6 +137,10 @@ class HamiltonianMonteCarlo(TransitionOperator):
             p = torch.randn_like(point.x) * self.mass_vector
             current_p = p
             grad_u = grad_U(point)
+
+            # For each of the samples, track if any of the dimensions ever went out of bounds:
+            oob_mask = torch.Tensor([False] * original_point.x.shape[0]).to(original_point.x.device)
+
             # Now loop through position and momentum leapfrogs
             for l in range(self.L):
                 # make momentum half step
@@ -146,11 +153,16 @@ class HamiltonianMonteCarlo(TransitionOperator):
                 # make momentum half step
                 p = p - epsilon * grad_u / 2
 
+                if self._sampling_bounds is not None:
+                    oob_mask = oob_mask | (torch.any(point.x < self._sampling_bounds[:, 0].view(1,-1), dim=1)) | (torch.any(point.x > self._sampling_bounds[:, 1].view(1,-1), dim=1))
+
             accept, log_p_accept_mean = self.metropolis_accept(
                 point_proposed=point, point_current=current_point,
                 p_proposed=p, p_current=current_p,
                 U=U, mass_matrix=self.mass_vector
             )
+            accept = accept & ~oob_mask # reject samples that went out of bounds
+
             current_point[accept] = point[accept]
             self.store_info(i=i, n=n, p_accept_mean=torch.exp(log_p_accept_mean), current_x=point.x,
                             original_x=original_point.x)
