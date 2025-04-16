@@ -138,40 +138,48 @@ class HamiltonianMonteCarlo(TransitionOperator):
             current_p = p
             grad_u = grad_U(point)
 
-            # For each of the samples, track if any of the dimensions ever went out of bounds:
-            oob_mask = torch.zeros(
+            local_oob_mask = torch.zeros(
                 original_point.x.shape[0], dtype=bool, device=original_point.x.device
             )
-
-            x = point.x
+            global_oob_mask = torch.zeros(
+                original_point.x.shape[0], dtype=bool, device=original_point.x.device
+            )
 
             # Now loop through position and momentum leapfrogs
             for l in range(self.L):
                 # Make momentum half step
-                p[~oob_mask] = p[~oob_mask] - epsilon * grad_u / 2
+                p = p - epsilon * grad_u / 2
 
                 # Make full step for position
-                x[~oob_mask] = point.x[~oob_mask] + epsilon / self.mass_vector * p[~oob_mask]
+                x = point.x + epsilon / self.mass_vector * p
+
                 if self._sampling_bounds is not None: # Update OOB mask
-                    oob_mask = oob_mask | (torch.any(x < self._sampling_bounds[:, 0].view(1,-1), dim=1)) | (torch.any(x > self._sampling_bounds[:, 1].view(1,-1), dim=1))
+                    local_oob_mask = (torch.any(x < self._sampling_bounds[:, 0].view(1,-1), dim=1)) | (torch.any(x > self._sampling_bounds[:, 1].view(1,-1), dim=1))
+                    x = x[~local_oob_mask]
+
+                    global_oob_mask[~global_oob_mask] = local_oob_mask
 
                 # Update grad_u, only for the non-OOB samples
-                point = self.create_new_point(x[~oob_mask])
+                point = self.create_new_point(x)
                 grad_u = grad_U(point)
 
                 # Make momentum half step
-                p[~oob_mask] = p[~oob_mask] - epsilon * grad_u / 2
+                p = p[~local_oob_mask] - epsilon * grad_u / 2
 
             accept, log_p_accept_mean = self.metropolis_accept(
-                point_proposed=point, point_current=current_point,
-                p_proposed=p, p_current=current_p,
+                point_proposed=point, point_current=current_point[~global_oob_mask],
+                p_proposed=p, p_current=current_p[~global_oob_mask],
                 U=U, mass_matrix=self.mass_vector
             )
-            accept = accept & ~oob_mask # reject samples that went out of bounds in the trajectory
 
-            current_point[accept] = point[accept]
+            global_accept = torch.zeros(
+                original_point.x.shape[0], dtype=torch.bool, device=original_point.x.device
+            )
+            global_accept[~global_oob_mask] = accept
+
+            current_point[global_accept] = point[accept]
             self.store_info(i=i, n=n, p_accept_mean=torch.exp(log_p_accept_mean), current_x=point.x,
-                            original_x=original_point.x)
+                            original_x=original_point.x[~global_oob_mask])
             if not self.eval_mode:
                 self.adjust_step_size_p_accept(log_p_accept_mean=log_p_accept_mean,
                                                i=i, n=n)
