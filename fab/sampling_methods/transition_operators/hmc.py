@@ -132,17 +132,19 @@ class HamiltonianMonteCarlo(TransitionOperator):
     def HMC_func(self, U, point: Point, grad_U, i):
         current_point = point
         for n in range(self.n_outer):
-            original_point = current_point
+            point = current_point
+            original_point = current_point # Only used for logging
+
             epsilon = self.get_epsilon(i, n)
             p = torch.randn_like(point.x) * self.mass_vector
             current_p = p
             grad_u = grad_U(point)
 
             local_oob_mask = torch.zeros(
-                original_point.x.shape[0], dtype=bool, device=original_point.x.device
+                current_point.x.shape[0], dtype=bool, device=current_point.x.device
             )
             global_oob_mask = torch.zeros(
-                original_point.x.shape[0], dtype=bool, device=original_point.x.device
+                current_point.x.shape[0], dtype=bool, device=current_point.x.device
             )
 
             # Now loop through position and momentum leapfrogs
@@ -173,7 +175,7 @@ class HamiltonianMonteCarlo(TransitionOperator):
             )
 
             global_accept = torch.zeros(
-                original_point.x.shape[0], dtype=torch.bool, device=original_point.x.device
+                current_point.x.shape[0], dtype=torch.bool, device=current_point.x.device
             )
             global_accept[~global_oob_mask] = accept
 
