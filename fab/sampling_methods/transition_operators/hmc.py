@@ -192,6 +192,8 @@ class HamiltonianMonteCarlo(TransitionOperator):
                 current_point.x.shape[0], dtype=bool, device=current_point.x.device
             )
 
+            # all_OOB = False
+
             # Now loop through position and momentum leapfrogs
             for l in range(self.L):
                 # Make momentum half step
@@ -208,12 +210,20 @@ class HamiltonianMonteCarlo(TransitionOperator):
 
                     global_oob_mask[~global_oob_mask] = local_oob_mask
 
+                    # if torch.sum(~local_oob_mask) == 0:
+                    #     all_OOB = True
+                    #     break
+
                 # Update grad_u, only for the non-OOB samples
                 point = self.create_new_point(x)
                 grad_u = grad_U(point)
 
                 # Make momentum half step
                 p = p[~local_oob_mask] - epsilon * grad_u / 2
+
+            # if all_OOB:
+            #     print("Warning: All samples OOB in HMC step.")
+            #     continue
 
             accept, log_p_accept_mean = self.metropolis_accept(
                 point_proposed=point,
